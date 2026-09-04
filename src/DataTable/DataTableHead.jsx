@@ -26,11 +26,12 @@ function DataTableHead(props) {
   return (
     <TableHead>
       <TableRow>
-        {enableExpand && <TableCell sx={{ width: 48 }} />}
+        {enableExpand && <TableCell sx={{ width: 48, padding: '0 2px' }} />}
         {enableSelection && (
           <TableCell padding="checkbox">
             <Checkbox
               color="primary"
+              size="small"
               indeterminate={numSelected > 0 && numSelected < rowCount}
               checked={rowCount > 0 && numSelected === rowCount}
               onChange={onSelectAllClick}

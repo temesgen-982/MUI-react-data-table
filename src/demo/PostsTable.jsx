@@ -23,7 +23,7 @@ const columns = [
   {
     id: 'title',
     label: 'Title',
-    flex: 3,
+    flex: 2,
   },
   {
     id: 'tags',
@@ -43,19 +43,19 @@ const columns = [
     id: 'likes',
     numeric: true,
     label: 'Likes',
-    width: 64,
+    width: 88,
     valueGetter: (row) => row.reactions?.likes ?? 0,
   },
   {
     id: 'views',
     numeric: true,
     label: 'Views',
-    width: 64,
+    width: 96,
   },
   {
     id: 'userId',
     label: 'User',
-    width: 160,
+    width: 188,
     hideBelow: 'md',
     render: (userId) => <UserBadge userId={userId} />,
   },
