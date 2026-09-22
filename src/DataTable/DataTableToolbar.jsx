@@ -11,8 +11,18 @@ import FilterListIcon from '@mui/icons-material/FilterList';
 import DownloadIcon from '@mui/icons-material/Download';
 import DensitySmallIcon from '@mui/icons-material/DensitySmall';
 import DensityMediumIcon from '@mui/icons-material/DensityMedium';
+import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
+import InputBase from '@mui/material/InputBase';
+import Box from '@mui/material/Box';
 import { alpha } from '@mui/material/styles';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+
+// Shared style for toolbar icon buttons
+const toolbarIconButtonSx = {
+  borderRadius: 1,
+  bgcolor: 'action.hover',
+};
 
 function DataTableToolbar(props) {
   const {
@@ -29,10 +39,18 @@ function DataTableToolbar(props) {
     enableColumnVisibility,
     enableDense,
     enableExport,
+    enableSearch,
+    searchValue = '',
+    onSearchChange,
+    searchPlaceholder = 'Search…',
     toolbarExtras,
+    titleExtras,
   } = props;
   const [anchorEl, setAnchorEl] = useState(null);
+  const [searchOpen, setSearchOpen] = useState(Boolean(searchValue));
+  const inputRef = useRef(null);
   const menuOpen = Boolean(anchorEl);
+  const showSearchField = searchOpen || Boolean(searchValue);
 
   const handleOpenMenu = (event) => {
     setAnchorEl(event.currentTarget);
@@ -40,6 +58,11 @@ function DataTableToolbar(props) {
 
   const handleCloseMenu = () => {
     setAnchorEl(null);
+  };
+
+  const handleSearchClose = () => {
+    onSearchChange?.('');
+    setSearchOpen(false);
   };
 
   return (
@@ -69,20 +92,81 @@ function DataTableToolbar(props) {
           {numSelected} selected
         </Typography>
       ) : (
-        <Typography
-          sx={{ mr: 'auto' }}
-          variant="h6"
-          id={titleId}
-          component="div"
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            mr: 'auto',
+            minWidth: 0,
+            flexWrap: 'wrap',
+          }}
         >
-          {title}
-        </Typography>
+          <Typography
+            variant="h6"
+            id={titleId}
+            component="div"
+            sx={{ minWidth: 0 }}
+          >
+            {title}
+          </Typography>
+          {titleExtras}
+        </Box>
       )}
       {numSelected > 0 && onDelete && (
         <Tooltip title="Delete">
-          <IconButton onClick={() => onDelete()} aria-label="delete">
+          <IconButton onClick={() => onDelete()} aria-label="delete" sx={toolbarIconButtonSx}>
             <DeleteIcon />
           </IconButton>
+        </Tooltip>
+      )}
+      {enableSearch && numSelected === 0 && (
+        <Tooltip title={showSearchField ? '' : 'Search'}>
+          <InputBase
+          ref={inputRef}
+          value={searchValue}
+          onChange={(event) => onSearchChange?.(event.target.value)}
+          onFocus={() => setSearchOpen(true)}
+          onClick={() => {
+            if (!showSearchField) {
+              setSearchOpen(true);
+              inputRef.current?.focus();
+            }
+          }}
+          onBlur={() => {
+            if (!searchValue) {
+              setSearchOpen(false);
+            }
+          }}
+          placeholder={showSearchField ? searchPlaceholder : undefined}
+          inputProps={{ 'aria-label': searchPlaceholder }}
+          sx={{
+            overflow: 'hidden',
+            width: showSearchField ? { xs: '60vw', sm: 280 } : 44,
+            px: 1.5,
+            py: 0.5,
+            borderRadius: 1,
+            bgcolor: 'action.hover',
+            cursor: showSearchField ? 'text' : 'pointer',
+            transition: (theme) =>
+              theme.transitions.create('width', {
+                duration: theme.transitions.duration.standard,
+              }),
+          }}
+          startAdornment={<SearchIcon sx={{ mr: 1, color: 'text.secondary', fontSize: 20 }} />}
+          endAdornment={
+            searchValue ? (
+              <IconButton
+                size="small"
+                aria-label="clear search"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={handleSearchClose}
+              >
+                <ClearIcon fontSize="small" />
+              </IconButton>
+            ) : null
+          }
+        />
         </Tooltip>
       )}
       {enableColumnVisibility && (
@@ -92,6 +176,7 @@ function DataTableToolbar(props) {
             aria-label="columns visibility"
             aria-expanded={menuOpen}
             aria-haspopup="menu"
+            sx={toolbarIconButtonSx}
           >
             <FilterListIcon />
           </IconButton>
@@ -103,6 +188,7 @@ function DataTableToolbar(props) {
             onClick={onToggleDense}
             aria-label="toggle dense padding"
             color={dense ? 'primary' : undefined}
+            sx={toolbarIconButtonSx}
           >
             {dense ? <DensitySmallIcon /> : <DensityMediumIcon />}
           </IconButton>
@@ -110,7 +196,7 @@ function DataTableToolbar(props) {
       )}
       {enableExport && (
         <Tooltip title="Export CSV">
-          <IconButton onClick={onExport} aria-label="export CSV">
+          <IconButton onClick={onExport} aria-label="export CSV" sx={toolbarIconButtonSx}>
             <DownloadIcon />
           </IconButton>
         </Tooltip>

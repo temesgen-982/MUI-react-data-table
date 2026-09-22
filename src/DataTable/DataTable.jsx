@@ -49,6 +49,11 @@ function DataTable(props) {
     cardViewBreakpoint = 'md',
     loading = false,
     toolbarExtras,
+    titleExtras,
+    enableSearch = false,
+    searchValue,
+    onSearchChange,
+    searchPlaceholder,
     onDelete,
     totalCount,
     page: pageProp,
@@ -209,7 +214,12 @@ function DataTable(props) {
           enableColumnVisibility={enableColumnVisibility}
           enableDense={enableDense}
           enableExport={enableExport}
+          enableSearch={enableSearch}
+          searchValue={searchValue}
+          onSearchChange={onSearchChange}
+          searchPlaceholder={searchPlaceholder}
           toolbarExtras={toolbarExtras}
+          titleExtras={titleExtras}
         />
         {isCardView ? (
           <DataTableCards

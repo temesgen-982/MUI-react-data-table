@@ -1,13 +1,17 @@
+import { useEffect, useState } from 'react';
 import Typography from '@mui/material/Typography';
 import Chip from '@mui/material/Chip';
 import Stack from '@mui/material/Stack';
 import DataTable, { useServerDataTable } from '../DataTable/index.js';
 import UserBadge from './UserBadge.jsx';
 
-const fetchPosts = ({ page, limit, userId, tag }) => {
+const fetchPosts = ({ page, limit, userId, tag, q }) => {
   const params = new URLSearchParams({ limit, skip: page * limit });
   let url;
-  if (userId) {
+  if (q) {
+    params.set('q', q);
+    url = `https://dummyjson.com/posts/search?${params}`;
+  } else if (userId) {
     url = `https://dummyjson.com/posts/user/${userId}?${params}`;
   } else if (tag) {
     url = `https://dummyjson.com/posts/tag/${tag}?${params}`;
@@ -91,12 +95,38 @@ function PostsTable() {
 
   const userId = query.userId ?? null;
   const tag = query.tag ?? null;
+  const searchQuery = query.q ?? '';
+  const [searchInput, setSearchInput] = useState('');
+
+  useEffect(() => {
+    const trimmed = searchInput.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      if (trimmed !== searchQuery) {
+        setQuery({ q: trimmed });
+      }
+    }, 300);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [searchInput, searchQuery, setQuery]);
+
+  const handleSearchChange = (value) => {
+    setSearchInput(value);
+    if (!value.trim() && searchQuery) {
+      setQuery({});
+    }
+  };
 
   const applyFilter = (kind, value) => {
+    setSearchInput('');
     setQuery(value ? { [kind]: value } : {});
   };
 
   const clearFilter = () => {
+    setSearchInput('');
     setQuery({});
   };
 
@@ -135,16 +165,26 @@ function PostsTable() {
     return column;
   });
 
-  const filterLabel = userId ? `User ${userId}` : tag ? `#${tag}` : null;
+  const filterLabel = searchQuery
+    ? `"${searchQuery}"`
+    : userId
+      ? `User ${userId}`
+      : tag
+        ? `#${tag}`
+        : null;
 
   return (
     <DataTable
-      title={filterLabel ? `Posts · ${filterLabel}` : 'Posts'}
+      title="Posts"
       data={data}
       loading={loading}
       columns={interactiveColumns}
       getRowId={(row) => row.id}
       enableExpand
+      enableSearch
+      searchValue={searchInput}
+      onSearchChange={handleSearchChange}
+      searchPlaceholder="Search posts…"
       renderExpandRow={(row) => <PostsExpandRow row={row} />}
       expandWidth="min(720px, 100%)"
       totalCount={totalCount}
@@ -152,7 +192,8 @@ function PostsTable() {
       rowsPerPage={rowsPerPage}
       onPageChange={handleChangePage}
       onRowsPerPageChange={handleChangeRowsPerPage}
-      toolbarExtras={
+      toolbarExtras={undefined}
+      titleExtras={
         filterLabel && (
           <Chip
             label={`Filter: ${filterLabel}`}

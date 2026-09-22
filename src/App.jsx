@@ -136,11 +136,11 @@ sx={{
                   <a href="https://mui.com" target="_blank" rel="noopener noreferrer">MUI</a>.
                 </Typography>
                 <Typography sx={{ maxWidth: '80ch', textAlign: 'justify', mb: 1 }}>
-                  It loads posts from a live API and demonstrates sorting,
+                  It loads posts from a live API and demonstrates search, sorting,
                   pagination, column visibility toggles, row selection, CSV export, a
                   dense-mode toggle, and a card layout that kicks in on smaller screens.
-                  You can try clicking a user badge or a tag chip to filter the data
-                  server-side.
+                  You can try the search field, or click a user badge or a tag chip to
+                  filter the data server-side.
                 </Typography>
                 <Typography sx={{ maxWidth: '80ch', textAlign: 'justify', mb: 1 }}>
                   If you're building a CRUD-heavy app with lots of tables on MUI, this is
