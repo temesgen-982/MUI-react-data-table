@@ -37,6 +37,10 @@ export async function fetchComments(postId) {
 
 const usersCache = new Map();
 
+export function clearUsersCache() {
+  usersCache.clear();
+}
+
 export async function fetchUsers() {
   if (usersCache.has('all')) {
     return usersCache.get('all');

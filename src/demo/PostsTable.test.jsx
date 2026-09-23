@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, waitFor, within, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
@@ -6,8 +6,13 @@ import PostsTable from './PostsTable.jsx'
 import ToastProvider from '../ToastProvider.jsx'
 import { server } from '../test/msw.js'
 import { requestLog, recordRequest } from './mocks/handlers.js'
+import { clearUsersCache } from './postApi.js'
 
 const renderPosts = () => render(<ToastProvider><PostsTable /></ToastProvider>)
+
+beforeEach(() => {
+  clearUsersCache()
+})
 
 describe('PostsTable', () => {
   it('renders posts with edit and delete actions', async () => {
@@ -151,5 +156,151 @@ describe('PostsTable', () => {
     expect(await screen.findByText('Nice post!')).toBeInTheDocument()
     expect(screen.getByText('Comments (1)')).toBeInTheDocument()
     expect(screen.getByText('Carol Dan')).toBeInTheDocument()
+  })
+
+  it('removes a created post from the table after it is deleted', async () => {
+    const user = userEvent.setup()
+    let resolveAdd
+    const addPending = new Promise((resolve) => {
+      resolveAdd = resolve
+    })
+    server.use(
+      http.post('https://dummyjson.com/posts/add', async ({ request }) => {
+        const body = await request.json()
+        recordRequest(request, body)
+        await addPending
+        return HttpResponse.json({ id: 999, title: body.title, body, userId: body.userId })
+      }),
+    )
+
+    renderPosts()
+    await screen.findByText('Banana post')
+    await user.click(screen.getByRole('button', { name: 'create post' }))
+
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByLabelText('Title'), 'Fresh post')
+    await user.type(within(dialog).getByLabelText('Body'), 'Fresh body')
+    await user.click(within(dialog).getByRole('button', { name: 'Create Post' }))
+    await act(async () => {
+      resolveAdd()
+      await addPending
+    })
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    )
+    expect(await screen.findByText('Fresh post')).toBeInTheDocument()
+
+    await user.click(screen.getAllByRole('button', { name: 'delete post' })[0])
+    const confirmDialog = await screen.findByRole('dialog')
+    await user.click(within(confirmDialog).getByRole('button', { name: 'Delete' }))
+
+    expect(await screen.findByText('Post deleted')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    )
+    await waitFor(() =>
+      expect(screen.queryByText('Fresh post')).not.toBeInTheDocument(),
+    )
+    expect(screen.getByText('Banana post')).toBeInTheDocument()
+  })
+
+  it('recovers from a user-loading failure in the create form', async () => {
+    const user = userEvent.setup()
+    let fail = true
+    server.use(
+      http.get('https://dummyjson.com/users', () => {
+        if (fail) {
+          return HttpResponse.error()
+        }
+        return HttpResponse.json({
+          users: [{ id: 1, firstName: 'Alice', lastName: 'Adams', image: '' }],
+          total: 1,
+        })
+      }),
+    )
+
+    renderPosts()
+    await screen.findByText('Banana post')
+    await user.click(screen.getByRole('button', { name: 'create post' }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(/failed/i)
+    expect(within(dialog).getByLabelText('Author')).toBeDisabled()
+
+    fail = false
+    await user.click(within(dialog).getByRole('button', { name: 'Retry' }))
+
+    await waitFor(() =>
+      expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument(),
+    )
+    expect(within(dialog).getByLabelText('Author')).toBeEnabled()
+  })
+
+  it('does not subtract deletions from other queries totals', async () => {
+    const user = userEvent.setup()
+    server.use(
+      http.get('https://dummyjson.com/posts/search', ({ request }) => {
+        recordRequest(request)
+        return HttpResponse.json({
+          posts: [
+            {
+              id: 2,
+              title: 'Apple post',
+              body: 'Body two',
+              tags: ['life'],
+              reactions: { likes: 2, dislikes: 1 },
+              views: 20,
+              userId: 102,
+            },
+          ],
+          total: 1,
+        })
+      }),
+    )
+
+    renderPosts()
+    await screen.findByText('Banana post')
+    await user.click(screen.getAllByRole('button', { name: 'delete post' })[0])
+
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    )
+    expect(screen.getByText('1–1 of 1')).toBeInTheDocument()
+
+    await user.type(screen.getByRole('textbox', { name: 'Search posts…' }), 'Apple')
+
+    await waitFor(() =>
+      expect(screen.getByText('1–1 of 1')).toBeInTheDocument(),
+    )
+    expect(screen.queryByText('1–1 of 0')).not.toBeInTheDocument()
+  })
+
+  it('clears the previous delete error when reopening the confirm dialog', async () => {
+    const user = userEvent.setup()
+    server.use(
+      http.delete('https://dummyjson.com/posts/1', ({ request }) => {
+        recordRequest(request)
+        return HttpResponse.json({ message: 'boom' }, { status: 500 })
+      }),
+    )
+
+    renderPosts()
+    await screen.findByText('Banana post')
+    await user.click(screen.getAllByRole('button', { name: 'delete post' })[0])
+
+    let dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(/failed/i)
+
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    )
+
+    await user.click(screen.getAllByRole('button', { name: 'delete post' })[0])
+    dialog = await screen.findByRole('dialog')
+    expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument()
   })
 })

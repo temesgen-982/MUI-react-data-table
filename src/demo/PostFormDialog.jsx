@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Autocomplete from '@mui/material/Autocomplete';
+import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
@@ -10,8 +11,9 @@ import Typography from '@mui/material/Typography';
 import AddIcon from '@mui/icons-material/Add';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
-function PostFormDialog({ post, users, onSave, onClose, saving, error }) {
+function PostFormDialog({ post, users, onSave, onClose, saving, error, usersError, onRetryUsers }) {
   const isCreate = !post;
   const [title, setTitle] = useState(post?.title ?? '');
   const [body, setBody] = useState(post?.body ?? '');
@@ -80,10 +82,20 @@ function PostFormDialog({ post, users, onSave, onClose, saving, error }) {
                 {...params}
                 margin="dense"
                 label="Author"
-                helperText={!users ? 'Loading authors…' : undefined}
+                helperText={usersError ?? (!users ? 'Loading authors…' : undefined)}
               />
             )}
           />
+        )}
+        {isCreate && usersError && (
+          <Box sx={{ mt: 1 }}>
+            <Typography role="alert" color="error" variant="body2" sx={{ mb: 1 }}>
+              {usersError}
+            </Typography>
+            <Button size="small" startIcon={<RefreshIcon />} onClick={onRetryUsers}>
+              Retry
+            </Button>
+          </Box>
         )}
         {error && (
           <Typography role="alert" color="error" variant="body2" sx={{ mt: 1 }}>

@@ -16,6 +16,8 @@ import ConfirmDeleteDialog from './ConfirmDeleteDialog.jsx';
 import PostComments from './PostComments.jsx';
 import { useSnackbar } from 'notistack';
 
+const EMPTY_DELETED = new Set();
+
 const fetchPosts = ({ page, limit, userId, tag, q }) => {
   const params = new URLSearchParams({ limit, skip: page * limit });
   let url;
@@ -111,9 +113,10 @@ function PostsTable() {
   const [searchInput, setSearchInput] = useState('');
 
   const [editedPosts, setEditedPosts] = useState(new Map());
-  const [deletedIds, setDeletedIds] = useState(new Set());
+  const [deletionsByQuery, setDeletionsByQuery] = useState({});
   const [createdPosts, setCreatedPosts] = useState([]);
   const [users, setUsers] = useState(null);
+  const [usersError, setUsersError] = useState(null);
   const { enqueueSnackbar } = useSnackbar();
   const [editingPost, setEditingPost] = useState(null);
   const [isCreatingOpen, setIsCreatingOpen] = useState(false);
@@ -123,31 +126,53 @@ function PostsTable() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
 
+  const queryKey = `${userId}|${tag}|${searchQuery}`;
+  const currentDeletedIds = deletionsByQuery[queryKey] ?? EMPTY_DELETED;
+
   useEffect(() => {
     let cancelled = false;
-    fetchUsers().then((result) => {
-      if (!cancelled) {
-        setUsers(result);
-      }
-    });
+    fetchUsers()
+      .then((result) => {
+        if (!cancelled) {
+          setUsers(result);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setUsersError(err.message ?? 'Failed to load authors');
+        }
+      });
     return () => {
       cancelled = true;
     };
   }, []);
 
+  const handleRetryUsers = () => {
+    setUsersError(null);
+    setUsers(null);
+    fetchUsers()
+      .then((result) => {
+        setUsers(result);
+      })
+      .catch((err) => {
+        setUsersError(err.message ?? 'Failed to load authors');
+      });
+  };
+
   const displayData = useMemo(
     () => [
-      ...createdPosts,
+      ...createdPosts.filter((row) => !currentDeletedIds.has(row.id)),
       ...data
-        .filter((row) => !deletedIds.has(row.id))
+        .filter((row) => !currentDeletedIds.has(row.id))
         .map((row) => {
           const edit = editedPosts.get(row.id);
           return edit ? { ...row, ...edit } : row;
         }),
     ],
-    [data, deletedIds, editedPosts, createdPosts],
+    [data, currentDeletedIds, editedPosts, createdPosts],
   );
-  const displayTotal = totalCount + createdPosts.length - deletedIds.size;
+  const displayTotal =
+    totalCount + createdPosts.length - currentDeletedIds.size;
 
   const handleFormSave = async ({ title, body, userId }) => {
     setSaving(true);
@@ -201,8 +226,8 @@ setEditingPost(null);
     setDeleteError(null);
     try {
       await deletePost(deletingPost.id);
-      const nextDeleted = new Set(deletedIds).add(deletingPost.id);
-      setDeletedIds(nextDeleted);
+      const nextDeleted = new Set(currentDeletedIds).add(deletingPost.id);
+      setDeletionsByQuery((prev) => ({ ...prev, [queryKey]: nextDeleted }));
       const remainingOnPage = data.filter(
         (row) => !nextDeleted.has(row.id),
       ).length;
@@ -384,12 +409,17 @@ setEditingPost(null);
           onSave={handleFormSave}
           saving={saving}
           error={formError}
+          usersError={usersError}
+          onRetryUsers={handleRetryUsers}
         />
       )}
       <ConfirmDeleteDialog
         open={Boolean(deletingPost)}
         title={deletingPost?.title}
-        onClose={() => setDeletingPost(null)}
+        onClose={() => {
+          setDeletingPost(null);
+          setDeleteError(null);
+        }}
         onConfirm={handleConfirmDelete}
         deleting={deleting}
         error={deleteError}
