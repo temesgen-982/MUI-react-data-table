@@ -49,13 +49,17 @@ function DataTableHead(props) {
             style={columnWidthStyle(column)}
             sortDirection={orderBy === column.id ? order : false}
           >
-            <TableSortLabel
-              active={orderBy === column.id}
-              direction={orderBy === column.id ? order : 'asc'}
-              onClick={createSortHandler(column.id)}
-            >
-              {column.label}
-            </TableSortLabel>
+            {column.sortable === false ? (
+              column.label
+            ) : (
+              <TableSortLabel
+                active={orderBy === column.id}
+                direction={orderBy === column.id ? order : 'asc'}
+                onClick={createSortHandler(column.id)}
+              >
+                {column.label}
+              </TableSortLabel>
+            )}
           </TableCell>
         ))}
       </TableRow>
