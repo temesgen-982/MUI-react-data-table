@@ -5,9 +5,12 @@ export function useTableExport() {
       return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
     };
 
-    const header = visibleColumns.map((column) => escapeCell(column.label));
+    const exportableColumns = visibleColumns.filter(
+      (column) => column.exportable !== false,
+    );
+    const header = exportableColumns.map((column) => escapeCell(column.label));
     const body = rows.map((row) =>
-      visibleColumns.map((column) => {
+      exportableColumns.map((column) => {
         const raw = column.valueGetter ? column.valueGetter(row) : row[column.id];
         let value = column.format ? column.format(raw) : raw;
         if (Array.isArray(value)) {

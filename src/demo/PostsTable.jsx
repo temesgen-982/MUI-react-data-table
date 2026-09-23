@@ -1,9 +1,22 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useEffect, useState } from 'react';
+import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Chip from '@mui/material/Chip';
 import Stack from '@mui/material/Stack';
+import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
+import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 import DataTable, { useServerDataTable } from '../DataTable/index.js';
 import UserBadge from './UserBadge.jsx';
+import { updatePost, deletePost, createPost, fetchUsers } from './postApi.js';
+import PostFormDialog from './PostFormDialog.jsx';
+import ConfirmDeleteDialog from './ConfirmDeleteDialog.jsx';
+import PostComments from './PostComments.jsx';
+import { useSnackbar } from 'notistack';
+
+const EMPTY_DELETED = new Set();
 
 const fetchPosts = ({ page, limit, userId, tag, q }) => {
   const params = new URLSearchParams({ limit, skip: page * limit });
@@ -76,6 +89,7 @@ function PostsExpandRow({ row }) {
         Reactions: {row.reactions?.likes ?? 0} likes ·{' '}
         {row.reactions?.dislikes ?? 0} dislikes
       </Typography>
+      <PostComments postId={row.id} />
     </>
   );
 }
@@ -97,6 +111,137 @@ function PostsTable() {
   const tag = query.tag ?? null;
   const searchQuery = query.q ?? '';
   const [searchInput, setSearchInput] = useState('');
+
+  const [editedPosts, setEditedPosts] = useState(new Map());
+  const [deletionsByQuery, setDeletionsByQuery] = useState({});
+  const [createdPosts, setCreatedPosts] = useState([]);
+  const [users, setUsers] = useState(null);
+  const [usersError, setUsersError] = useState(null);
+  const { enqueueSnackbar } = useSnackbar();
+  const [editingPost, setEditingPost] = useState(null);
+  const [isCreatingOpen, setIsCreatingOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState(null);
+  const [deletingPost, setDeletingPost] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
+
+  const queryKey = `${userId}|${tag}|${searchQuery}`;
+  const currentDeletedIds = deletionsByQuery[queryKey] ?? EMPTY_DELETED;
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchUsers()
+      .then((result) => {
+        if (!cancelled) {
+          setUsers(result);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setUsersError(err.message ?? 'Failed to load authors');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleRetryUsers = () => {
+    setUsersError(null);
+    setUsers(null);
+    fetchUsers()
+      .then((result) => {
+        setUsers(result);
+      })
+      .catch((err) => {
+        setUsersError(err.message ?? 'Failed to load authors');
+      });
+  };
+
+  const displayData = useMemo(
+    () => [
+      ...createdPosts.filter((row) => !currentDeletedIds.has(row.id)),
+      ...data
+        .filter((row) => !currentDeletedIds.has(row.id))
+        .map((row) => {
+          const edit = editedPosts.get(row.id);
+          return edit ? { ...row, ...edit } : row;
+        }),
+    ],
+    [data, currentDeletedIds, editedPosts, createdPosts],
+  );
+  const displayTotal =
+    totalCount + createdPosts.length - currentDeletedIds.size;
+
+  const handleFormSave = async ({ title, body, userId }) => {
+    setSaving(true);
+    setFormError(null);
+    try {
+      if (!editingPost) {
+        const resp = await createPost({ title, body, userId });
+        setCreatedPosts((prev) => [
+          {
+            ...resp,
+            body,
+            tags: resp.tags ?? [],
+            reactions: resp.reactions ?? { likes: 0, dislikes: 0 },
+            views: resp.views ?? 0,
+          },
+          ...prev,
+        ]);
+setIsCreatingOpen(false);
+        enqueueSnackbar('Post created', { variant: 'success' });
+      } else {
+        await updatePost(editingPost.id, { title, body });
+        setEditedPosts(
+          (prev) => new Map(prev).set(editingPost.id, { title, body }),
+        );
+setEditingPost(null);
+        enqueueSnackbar('Post updated', { variant: 'success' });
+      }
+    } catch (err) {
+      setFormError(err.message ?? 'Failed to save post');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const closeForm = () => {
+    setEditingPost(null);
+    setIsCreatingOpen(false);
+    setFormError(null);
+  };
+
+  const openCreate = () => {
+    setFormError(null);
+    setIsCreatingOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingPost) {
+      return;
+    }
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deletePost(deletingPost.id);
+      const nextDeleted = new Set(currentDeletedIds).add(deletingPost.id);
+      setDeletionsByQuery((prev) => ({ ...prev, [queryKey]: nextDeleted }));
+      const remainingOnPage = data.filter(
+        (row) => !nextDeleted.has(row.id),
+      ).length;
+      if (remainingOnPage === 0 && page > 0) {
+        handleChangePage(null, page - 1);
+      }
+      setDeletingPost(null);
+      enqueueSnackbar('Post deleted', { variant: 'success' });
+    } catch (err) {
+      setDeleteError(err.message ?? 'Failed to delete post');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   useEffect(() => {
     const trimmed = searchInput.trim();
@@ -165,6 +310,48 @@ function PostsTable() {
     return column;
   });
 
+  const actionsColumn = {
+    id: 'actions',
+    label: 'Actions',
+    width: 112,
+    sortable: false,
+    exportable: false,
+    render: (_, row) => {
+      const busy =
+        (saving && editingPost?.id === row.id) ||
+        (deleting && deletingPost?.id === row.id);
+      return (
+        <Stack direction="row" sx={{ gap: 0.5 }}>
+          <IconButton
+            aria-label="edit post"
+            size="small"
+            color="primary"
+            disabled={busy}
+            onClick={(event) => {
+              event.stopPropagation();
+              setEditingPost(row);
+            }}
+          >
+            <EditIcon fontSize="small" />
+          </IconButton>
+          <IconButton
+            aria-label="delete post"
+            size="small"
+            color="error"
+            disabled={busy}
+            onClick={(event) => {
+              event.stopPropagation();
+              setDeletingPost(row);
+            }}
+          >
+            <DeleteIcon fontSize="small" />
+          </IconButton>
+        </Stack>
+      );
+    },
+  };
+  interactiveColumns.push(actionsColumn);
+
   const filterLabel = searchQuery
     ? `"${searchQuery}"`
     : userId
@@ -174,36 +361,70 @@ function PostsTable() {
         : null;
 
   return (
-    <DataTable
-      title="Posts"
-      data={data}
-      loading={loading}
-      columns={interactiveColumns}
-      getRowId={(row) => row.id}
-      enableExpand
-      enableSearch
-      searchValue={searchInput}
-      onSearchChange={handleSearchChange}
-      searchPlaceholder="Search posts…"
-      renderExpandRow={(row) => <PostsExpandRow row={row} />}
-      expandWidth="min(720px, 100%)"
-      totalCount={totalCount}
-      page={page}
-      rowsPerPage={rowsPerPage}
-      onPageChange={handleChangePage}
-      onRowsPerPageChange={handleChangeRowsPerPage}
-      toolbarExtras={undefined}
-      titleExtras={
-        filterLabel && (
-          <Chip
-            label={`Filter: ${filterLabel}`}
-            size="small"
-            color="primary"
-            onDelete={clearFilter}
-          />
-        )
-      }
-    />
+    <>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          aria-label="create post"
+          onClick={openCreate}
+        >
+          Create Post
+        </Button>
+      </Box>
+      <DataTable
+        title="Posts"
+        data={displayData}
+        loading={loading}
+        columns={interactiveColumns}
+        getRowId={(row) => row.id}
+        enableExpand
+        enableSearch
+        searchValue={searchInput}
+        onSearchChange={handleSearchChange}
+        searchPlaceholder="Search posts…"
+        renderExpandRow={(row) => <PostsExpandRow row={row} />}
+        expandWidth="min(720px, 100%)"
+        totalCount={displayTotal}
+        page={page}
+        rowsPerPage={rowsPerPage}
+        onPageChange={handleChangePage}
+        onRowsPerPageChange={handleChangeRowsPerPage}
+        titleExtras={
+          filterLabel && (
+            <Chip
+              label={`Filter: ${filterLabel}`}
+              size="small"
+              color="primary"
+              onDelete={clearFilter}
+            />
+          )
+        }
+      />
+      {(editingPost || isCreatingOpen) && (
+        <PostFormDialog
+          post={editingPost}
+          users={users}
+          onClose={closeForm}
+          onSave={handleFormSave}
+          saving={saving}
+          error={formError}
+          usersError={usersError}
+          onRetryUsers={handleRetryUsers}
+        />
+      )}
+      <ConfirmDeleteDialog
+        open={Boolean(deletingPost)}
+        title={deletingPost?.title}
+        onClose={() => {
+          setDeletingPost(null);
+          setDeleteError(null);
+        }}
+        onConfirm={handleConfirmDelete}
+        deleting={deleting}
+        error={deleteError}
+      />
+    </>
   );
 }
 

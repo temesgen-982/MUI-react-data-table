@@ -7,6 +7,7 @@ import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import Avatar from '@mui/material/Avatar';
+import IconButton from '@mui/material/IconButton';
 import ButtonBase from '@mui/material/ButtonBase';
 import Accordion from '@mui/material/Accordion';
 import AccordionSummary from '@mui/material/AccordionSummary';
@@ -17,7 +18,9 @@ import PersonIcon from '@mui/icons-material/Person';
 import GitHubIcon from '@mui/icons-material/GitHub';
 import LinkedInIcon from '@mui/icons-material/LinkedIn';
 import LanguageIcon from '@mui/icons-material/Language';
+import { useSnackbar } from 'notistack';
 import { ErrorBoundary, getErrorMessage } from 'react-error-boundary';
+import ToastProvider from './ToastProvider.jsx';
 import profileImg from './assets/profile.webp';
 
 const socialLinks = [
@@ -67,21 +70,37 @@ function Section({ id, children }) {
 
 function App() {
   return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
+    </ThemeProvider>
+  );
+}
+
+function AppContent() {
+  const { enqueueSnackbar } = useSnackbar();
+  return (
     <>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
         <Box component="header" id="header" sx={{ py: 2, px: '2.5rem', borderBottom: 1, borderColor: 'divider' }}>
           <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
             <Typography variant="h6" component="div">
               React Data Table
             </Typography>
-            <Avatar
-              alt="An image of Temesgen Adane. The creator of this website."
-              src={profileImg}
-              sx={{ width: 32, height: 32, ml: 'auto', '& .MuiAvatar-img': { objectPosition: 'top' } }}
+            <IconButton
+              aria-label="Profile picture"
+              onClick={() => enqueueSnackbar('wazzzz up!', { variant: 'success' })}
+              sx={{ ml: 'auto', p: 0 }}
             >
-              T
-            </Avatar>
+              <Avatar
+                alt="An image of Temesgen Adane. The creator of this website."
+                src={profileImg}
+                sx={{ width: 32, height: 32, '& .MuiAvatar-img': { objectPosition: 'top' } }}
+              >
+                T
+              </Avatar>
+            </IconButton>
           </Stack>
         </Box>
 
@@ -181,7 +200,6 @@ sx={{
 
         <div className="ticks"></div>
         <Box component="section" id="spacer" sx={{ height: '8rem', borderTop: 1, borderColor: 'divider' }} />
-      </ThemeProvider>
     </>
   );
 }

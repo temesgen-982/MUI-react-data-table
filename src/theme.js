@@ -11,6 +11,8 @@ const theme = createTheme({
       palette: {
         primary: { main: '#aa3bff', contrastText: '#ffffff' },
         secondary: { main: '#5b21b6' },
+        success: { main: '#16a34a' },
+        error: { main: '#dc2626' },
         background: { default: '#ffffff', paper: '#ffffff' },
         text: { primary: '#6b6375', secondary: '#08060d' },
         divider: '#e5e4e7',
@@ -23,6 +25,8 @@ const theme = createTheme({
       palette: {
         primary: { main: '#aa3bff', contrastText: '#ffffff' },
         secondary: { main: '#5b21b6' },
+        success: { main: '#4ade80' },
+        error: { main: '#f87171' },
         background: { default: '#16171d', paper: '#16171d' },
         text: { primary: '#9ca3af', secondary: '#f3f4f6' },
         divider: '#2e303a',
